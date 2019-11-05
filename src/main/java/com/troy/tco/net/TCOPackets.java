@@ -33,6 +33,7 @@ public class TCOPackets
 	public static void init()
 	{
 		// Nop. Call static initializer
+		System.out.println("Registered packets and packet handlers");
 	}
 
 	public static class TCOKitModifiedHandler implements IMessageHandler<TCOKitModified, TCOKitApproved>

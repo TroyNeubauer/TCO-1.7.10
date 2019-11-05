@@ -37,6 +37,7 @@ public class TCO
 	public void init(FMLInitializationEvent event)
 	{
 		FMLCommonHandler.instance().bus().register(this);
+		proxy.registerNetworking();
 		
 		NetworkRegistry.INSTANCE.registerGuiHandler(this, new TCOGuiHandler());
 	}
