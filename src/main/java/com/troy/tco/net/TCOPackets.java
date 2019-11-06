@@ -1,17 +1,22 @@
 package com.troy.tco.net;
 
+import com.troy.tco.client.gui.GuiKitEditor;
 import com.troy.tco.game.TCOKit;
+import com.troy.tco.inventory.ContainerKitEditor;
 import com.troy.tco.reference.Reference;
 import com.troy.tco.utility.*;
 
 import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.network.*;
 import cpw.mods.fml.common.network.simpleimpl.*;
-import cpw.mods.fml.relauncher.Side;
+import cpw.mods.fml.relauncher.*;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.*;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.inventory.*;
 import net.minecraft.nbt.*;
+import net.minecraft.network.play.server.S2DPacketOpenWindow;
 import net.minecraft.server.MinecraftServer;
 
 public class TCOPackets
@@ -19,15 +24,17 @@ public class TCOPackets
 
 	public static final SimpleNetworkWrapper HANDLER = NetworkRegistry.INSTANCE.newSimpleChannel(Reference.MOD_ID);
 
-	private static int id = 0;
+	private static int __TempID = 0;
 
 	static
 	{
-		HANDLER.registerMessage(TCOKitModifiedHandler.class, TCOKitModified.class, id++, Side.SERVER);
-		HANDLER.registerMessage(TCOKitModifiedHandler.class, TCOKitModified.class, id++, Side.CLIENT);
+		HANDLER.registerMessage(TCOKitCreatedHandler.class, TCOKitCreated.class, __TempID++, Side.SERVER);
+		HANDLER.registerMessage(TCOKitGuiOpenedHandlerServer.class, TCOKitGuiOpened.class, __TempID++, Side.SERVER);
+		HANDLER.registerMessage(TCOKitDeletedHandler.class, TCOKitDeleted.class, __TempID++, Side.SERVER);
 
-		HANDLER.registerMessage(TCOKitApprovedHandler.class, TCOKitApproved.class, id++, Side.CLIENT);
-		HANDLER.registerMessage(TCOKitGuiOpenedHandler.class, TCOKitGuiOpened.class, id++, Side.SERVER);
+		HANDLER.registerMessage(ApproveTCOKitHandler.class, ApproveTCOKit.class, __TempID++, Side.CLIENT);
+		HANDLER.registerMessage(OpenTCOKitGuiHandler.class, OpenTCOKitGui.class, __TempID++, Side.CLIENT);
+
 	}
 
 	public static void init()
@@ -36,36 +43,34 @@ public class TCOPackets
 		System.out.println("Registered packets and packet handlers");
 	}
 
-	public static class TCOKitModifiedHandler implements IMessageHandler<TCOKitModified, TCOKitApproved>
-	{// Updates the kit on both sides
+	public static class TCOKitCreatedHandler implements IMessageHandler<TCOKitCreated, IMessage>
+	{
 		@Override
-		public TCOKitApproved onMessage(TCOKitModified message, MessageContext ctx)
+		public ApproveTCOKit onMessage(TCOKitCreated message, MessageContext ctx)
 		{
-			if (SideUtils.getSide(ctx).equals(Side.SERVER) && message.kit.id == -1)// This is the server
-			{
-				int id = TCOStorage.get().nextKitID();
-				message.kit.id = id;// Assign the kit the next id
-				System.out.println("Server assigning id: " + id + " to kit name " + message.kit.name);
-				for (Object player : MinecraftServer.getServer().getEntityWorld().playerEntities)// Send to the other players
-				{
-					if (!ctx.getServerHandler().playerEntity.equals(player))
-						HANDLER.sendTo(new TCOKitModified(message.kit), ((EntityPlayerMP) player));
-				}
-				TCOStorage.get().updateKit(message.kit);
-				ctx.getServerHandler().playerEntity.openGui(TCO.instance, id, ctx.getServerHandler().playerEntity.worldObj, -1, -1, -1);
-				return new TCOKitApproved(id);
-			}
-			System.out.println("Client updating kit " + message.kit.name);
-			TCOStorage.get().updateKit(message.kit);
+
+			TCOKit kit = new TCOKit();
+			kit.id = TCOStorage.get().nextKitID();
+			kit.name = message.name;
+			TCOStorage.get().updateKit(kit);
+			System.out.println("Server assigning id: " + kit.id + " to kit name " + kit.name);
+			/*
+			 * for (Object player :
+			 * MinecraftServer.getServer().getEntityWorld().playerEntities)// Send to the
+			 * other players { if (!ctx.getServerHandler().playerEntity.equals(player))
+			 * HANDLER.sendTo(new TCOKitCreated(message.kit), ((EntityPlayerMP) player)); }
+			 */
+			HANDLER.sendTo(new ApproveTCOKit(kit.id), ctx.getServerHandler().playerEntity);
+			serverOpenTCOKitGui(ctx, kit);
 			return null;
 		}
 	}
 
-	public static class TCOKitApprovedHandler implements IMessageHandler<TCOKitApproved, IMessage>
+	public static class ApproveTCOKitHandler implements IMessageHandler<ApproveTCOKit, IMessage>
 	{
 
 		@Override
-		public IMessage onMessage(TCOKitApproved message, MessageContext ctx)
+		public IMessage onMessage(ApproveTCOKit message, MessageContext ctx)
 		{
 			TCOKit kit = TCOStorage.get().getKit(-1);
 			if (kit == null)
@@ -82,13 +87,43 @@ public class TCOPackets
 
 	}
 
-	public static class TCOKitGuiOpenedHandler implements IMessageHandler<TCOKitGuiOpened, IMessage>
+	public static class TCOKitGuiOpenedHandlerServer implements IMessageHandler<TCOKitGuiOpened, IMessage>
 	{
 
 		@Override
 		public IMessage onMessage(TCOKitGuiOpened message, MessageContext ctx)
 		{
-			ctx.getServerHandler().playerEntity.openGui(TCO.instance, message.id, ctx.getServerHandler().playerEntity.worldObj, -1, -1, -1);
+			TCOKit kit = TCOStorage.get().getKit(message.id);
+			serverOpenTCOKitGui(ctx, kit);
+			return null;
+		}
+
+	}
+
+	public static class OpenTCOKitGuiHandler implements IMessageHandler<OpenTCOKitGui, IMessage>
+	{
+
+		@Override
+		@SideOnly(Side.CLIENT)
+		public IMessage onMessage(OpenTCOKitGui message, MessageContext ctx)
+		{
+			TCOKit kit = TCOStorage.get().getKit(message.kitID);
+			EntityClientPlayerMP player = Minecraft.getMinecraft().thePlayer;
+			Minecraft.getMinecraft().displayGuiScreen(new GuiKitEditor(player.inventory, kit));
+			player.openContainer.windowId = message.windowID;
+			return null;
+		}
+
+	}
+
+	public static class TCOKitDeletedHandler implements IMessageHandler<TCOKitDeleted, IMessage>
+	{
+
+		@Override
+		public IMessage onMessage(TCOKitDeleted message, MessageContext ctx)
+		{
+			TCOStorage.get().deleteKit(message.id);
+			System.out.println("Server deleting kit " + message.id);
 			return null;
 		}
 
@@ -123,56 +158,104 @@ public class TCOPackets
 
 	}
 
-	public static class TCOKitModified implements IMessage
+	public static class TCOKitDeleted implements IMessage
 	{
 
-		private TCOKit kit;
+		public int id;
 
-		public TCOKitModified()
+		public TCOKitDeleted()
 		{
+
 		}
 
-		public TCOKitModified(TCOKit kit)
+		public TCOKitDeleted(int id)
 		{
-			if (Minecraft.getMinecraft().theWorld.isRemote)
-			{
-				System.out.println("Client waiting for kit " + kit.name + " to get its id");
-			}
-			this.kit = kit;
+			this.id = id;
 		}
 
 		@Override
 		public void fromBytes(ByteBuf buf)
 		{
-			NBTTagCompound nbt = ByteBufUtils.readTag(buf);
-
-			NBTTagList list = (NBTTagList) nbt.getTag("data");
-			kit = new TCOKit();
-			kit.readFromNBT(list);
+			this.id = buf.readInt();
 		}
 
 		@Override
 		public void toBytes(ByteBuf buf)
 		{
-			NBTTagList list = new NBTTagList();
-			kit.writeToNBT(list);
-
-			NBTTagCompound nbt = new NBTTagCompound();
-			nbt.setTag("data", list);
-			ByteBufUtils.writeTag(buf, nbt);
+			buf.writeInt(id);
 		}
 
 	}
 
-	public static class TCOKitApproved implements IMessage
+	public static class OpenTCOKitGui implements IMessage
 	{
-		public int id;
 
-		public TCOKitApproved()
+		public int kitID, windowID;
+
+		public OpenTCOKitGui()
+		{
+
+		}
+
+		public OpenTCOKitGui(int kitID, int windowID)
+		{
+			this.kitID = kitID;
+			this.windowID = windowID;
+		}
+
+		@Override
+		public void fromBytes(ByteBuf buf)
+		{
+			this.kitID = buf.readInt();
+			this.windowID = buf.readInt();
+		}
+
+		@Override
+		public void toBytes(ByteBuf buf)
+		{
+			buf.writeInt(kitID);
+			buf.writeInt(windowID);
+		}
+
+	}
+
+	public static class TCOKitCreated implements IMessage
+	{
+
+		public String name;
+
+		public TCOKitCreated()
 		{
 		}
 
-		public TCOKitApproved(int id)
+		public TCOKitCreated(String name)
+		{
+			this.name = name;
+		}
+
+		@Override
+		public void fromBytes(ByteBuf buf)
+		{
+			this.name = ByteBufUtils.readUTF8String(buf);
+		}
+
+		@Override
+		public void toBytes(ByteBuf buf)
+		{
+			ByteBufUtils.writeUTF8String(buf, name);
+		}
+
+	}
+
+	public static class ApproveTCOKit implements IMessage
+	{
+		public int id;
+
+		public ApproveTCOKit()
+		{
+		}
+
+		public ApproveTCOKit(int id)
 		{
 			this.id = id;
 		}
@@ -189,6 +272,22 @@ public class TCOPackets
 			this.id = buf.readInt();
 		}
 
+	}
+
+	public static void serverOpenTCOKitGui(MessageContext ctx, TCOKit kit)
+	{
+		System.out.println("Server telling client to open ui");
+		EntityPlayerMP player = ctx.getServerHandler().playerEntity;
+		if (player.openContainer != player.inventoryContainer)
+		{
+			player.closeScreen();
+		}
+
+		player.getNextWindowId();
+		HANDLER.sendTo(new OpenTCOKitGui(kit.id, player.currentWindowId), player);
+		player.openContainer = new ContainerKitEditor(player.inventory, kit);
+		player.openContainer.windowId = player.currentWindowId;
+		player.openContainer.addCraftingToCrafters(player);
 	}
 
 }

@@ -17,13 +17,15 @@ import net.minecraft.util.ResourceLocation;
 
 public class GuiTest extends GuiScreen
 {
-	private static final int WIDTH = 256, HEIGHT = 176;
+	private static final int WIDTH = 300, HEIGHT = 175;
 
 	private GuiTextField newName;
 
 	@Override
 	public void drawScreen(int x, int y, float ticks)
 	{
+		
+		
 		int guiX = (width - WIDTH) / 2;
 		int guiY = (height - HEIGHT) / 2;
 		drawDefaultBackground();
@@ -36,6 +38,8 @@ public class GuiTest extends GuiScreen
 		newName.drawTextBox();
 
 		fontRendererObj.drawString("TCO Setup", guiX + 5, guiY + 5, 0x404040);
+		
+		fontRendererObj.drawString("Kit Editor", guiX + 180, guiY + 5, 0x404040);
 
 	}
 
@@ -43,21 +47,22 @@ public class GuiTest extends GuiScreen
 	public void initGui()
 	{
 		buttonList.clear();
+		System.out.println(height);
 		int guiX = (width - WIDTH) / 2;
 		int guiY = (height - HEIGHT) / 2;
-
-		int y = guiY + 60;
-		int x = guiX + 10;
+		int x = guiX + 180;
+		int y = guiY + 20;
 		int nameWidth = 80;
 		for (TCOKit kit : TCOStorage.get().getKits())
 		{
-			buttonList.add(new TCOKitButton(kit.id, x, y, Math.min(nameWidth - 5, fontRendererObj.getStringWidth(kit.name) + 5), 15, kit.name));
-			buttonList.add(new GuiButton(kit.id, x + nameWidth, y, 40, 15, "X"));
-			y += 20;
+			buttonList.add(new TCOKitButton(kit.id, x, y, Math.min(nameWidth - 5, fontRendererObj.getStringWidth(kit.name) + 8), fontRendererObj.FONT_HEIGHT + 3, kit.name));
+			buttonList.add(new GuiButton(kit.id, x + nameWidth, y, 15, fontRendererObj.FONT_HEIGHT + 3, "X"));
+			y += fontRendererObj.FONT_HEIGHT + 5;
 		}
 		y += 5;
-		newName = new GuiTextField(fontRendererObj, x, y, 80, 18);
-		buttonList.add(new GuiButton(0, x + 100, y + 5, 90, 15, "Create New Kit"));
+		newName = new GuiTextField(fontRendererObj, x, y, 90, 18);
+		y += 20;
+		buttonList.add(new GuiButton(0, x - 2, y, 95, 15, "Create New Kit"));
 		super.initGui();
 	}
 
@@ -77,24 +82,27 @@ public class GuiTest extends GuiScreen
 		if (button.displayString.equals("X"))
 		{
 			TCOStorage.get().deleteKit(button.id);
-			System.out.println("Deleting kit id " + button.id);
+			TCOPackets.HANDLER.sendToServer(new TCOPackets.TCOKitDeleted(button.id));
 			initGui();
 		} else if (Minecraft.getMinecraft().thePlayer.capabilities.isCreativeMode)
 		{
 			if (button instanceof TCOKitButton)
 			{
-				Minecraft.getMinecraft().thePlayer.closeScreen();
 				TCOPackets.HANDLER.sendToServer(new TCOPackets.TCOKitGuiOpened(button.id));
-				//Minecraft.getMinecraft().thePlayer.openGui(TCO.instance, button.id, Minecraft.getMinecraft().theWorld, -1, -1, -1);
 			} else if (button.displayString.equals("Create New Kit") && !newName.getText().isEmpty())
 			{
+				System.out.println("Creating kit");
 				TCOKit kit = new TCOKit(newName.getText(), 0);
 				TCOStorage.get().updateKit(kit);
-				Minecraft.getMinecraft().thePlayer.closeScreen();
-				TCOPackets.HANDLER.sendToServer(new TCOPackets.TCOKitModified(kit));
-				//Minecraft.getMinecraft().thePlayer.openGui(TCO.instance, kit.id, Minecraft.getMinecraft().theWorld, -1, -1, -1);
+				TCOPackets.HANDLER.sendToServer(new TCOPackets.TCOKitCreated(kit.name));
 			}
 		}
+	}
+	
+	@Override
+	public boolean doesGuiPauseGame()
+	{
+		return false;
 	}
 
 	protected void keyTyped(char key, int other)

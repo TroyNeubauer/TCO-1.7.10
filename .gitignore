@@ -7,3 +7,5 @@ build/
 gradle/
 bin/
 eclipse/
+server/
+

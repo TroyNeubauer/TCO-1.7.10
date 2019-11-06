@@ -32,7 +32,7 @@ public class GuiKitEditor extends GuiContainer
 		drawDefaultBackground();
 
 		mc.renderEngine.bindTexture(new ResourceLocation(Reference.MOD_ID, "textures/gui/tco_kit.png"));
-		drawTexturedModalRect(guiX, guiY, 0, 0, this.width, this.height);
+		drawTexturedModalRect(guiX, guiY, 0, 0, this.xSize, this.ySize);
 
 	}
 
@@ -41,7 +41,14 @@ public class GuiKitEditor extends GuiContainer
 	{
 		String name = "Kit \"" + kit.name + "\"";
 		this.fontRendererObj.drawString(name, 8, 8, 0x404040);
+		this.fontRendererObj.drawString("Inventory", 8, 103, 0x404040);
 
+	}
+	
+	@Override
+	public boolean doesGuiPauseGame()
+	{
+		return false;
 	}
 
 }

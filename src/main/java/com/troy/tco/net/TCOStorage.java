@@ -6,6 +6,7 @@ import com.troy.tco.game.TCOKit;
 
 import cpw.mods.fml.client.FMLClientHandler;
 import cpw.mods.fml.common.FMLCommonHandler;
+import cpw.mods.fml.relauncher.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.*;
 import net.minecraft.server.MinecraftServer;
@@ -15,7 +16,8 @@ import net.minecraftforge.common.util.Constants.NBT;
 
 public class TCOStorage extends WorldSavedData
 {
-	private static TCOStorage INSTANCE = null;
+	private static TCOStorage CLIENT_INSTANCE = null;
+	private static TCOStorage SERVER_INSTANCE = null;
 
 	private HashMap<Integer, TCOKit> kits = new HashMap<Integer, TCOKit>();
 	// public ArrayList<TCOMap> maps;
@@ -38,7 +40,7 @@ public class TCOStorage extends WorldSavedData
 	{
 		// The IS_GLOBAL constant is there for clarity, and should be simplified into
 		// the right branch.
-		MapStorage storage = world.mapStorage;
+		MapStorage storage = world.perWorldStorage;
 		TCOStorage instance = (TCOStorage) storage.loadData(TCOStorage.class, DATA_NAME);
 
 		if (instance == null)
@@ -122,22 +124,32 @@ public class TCOStorage extends WorldSavedData
 
 	public static TCOStorage get()
 	{
-		if (INSTANCE == null)
+		if (FMLCommonHandler.instance().getEffectiveSide().equals(Side.SERVER))
 		{
-			if (MinecraftServer.getServer() == null)
-			{
-				INSTANCE = load(Minecraft.getMinecraft().theWorld);
-			} else
-			{
-				INSTANCE = load(MinecraftServer.getServer().getEntityWorld());
-			}
+			if (SERVER_INSTANCE == null)
+				SERVER_INSTANCE = loadServer();
+			return SERVER_INSTANCE;
+		} else if (Thread.currentThread().getName().contains("Client"))
+		{
+			if (CLIENT_INSTANCE == null)
+				CLIENT_INSTANCE = loadClient();
+			return CLIENT_INSTANCE;
+		} else
+		{
+			System.err.println("Accessing TCOStorage from non-standard thread: " + Thread.currentThread().getName());
 		}
-		return INSTANCE;
+		return null;
 	}
 
-	public static void set(TCOStorage instance)
+	private static TCOStorage loadServer()
 	{
-		INSTANCE = instance;
+		return load(MinecraftServer.getServer().getEntityWorld());
+	}
+
+	@SideOnly(Side.CLIENT)
+	private static TCOStorage loadClient()
+	{
+		return load(Minecraft.getMinecraft().theWorld);
 	}
 
 }
